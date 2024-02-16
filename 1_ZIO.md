@@ -74,6 +74,13 @@ val tupledZIO = meaningOfLife.zip(anotherMOL)
 val combinedZIO = meaningOfLife.zipWith(anotherMOL)(_ * _)
 ```
 
+### Some useful operations ###
+- Evaluate two ZIOs in sequence and take value of the LAST one - `zioa *> ziob`
+- Evaluate two ZIOs in sequence and take value of the FIRST one - `zioa <* ziob`
+- Convert the value of a ZIO to something else - `zioa.as(value)`
+- Discard the value of a ZIO to Unit - `zioa.asUnit`
+Note that ZIO flatMaps implement trampolining technique which involves allocating the ZIO instances on the heap instead of on the stack. This means that evaluating the chain of ZIOs is done in a tail recursive fashion behind the scenes by the ZIO runtime.
+
 - In `ZIO.suspend`, the error channel is `Throwable` because `ZIO.suspend` is used for effects whose construction itself may fail.
 - In `map` & `flatMap`, the Environment and Error channel stays the same.
 
@@ -102,3 +109,17 @@ val aSuccessfulIO: IO[String, Int] = ZIO.succeed(34)
 val aFailedIO: IO[String, Int] = ZIO.fail("Something bad happened")
 ```
 
+## Running ZIO Application from main() ##
+```
+def main(args: Array[String]): Unit = {
+    val runtime = Runtime.default
+    implicit val trace: Trace = Trace.empty
+    val meaningOfLife = ZIO.succeed(42)
+    Unsafe.unsafe { implicit u =>
+        val mol = runtime.unsafe.run(meaningOfLife)
+        println(mol)
+    }
+}
+```
+- Runtime involves the thread pool and the mechanism by which ZIOs can be evaluated.
+- Trace allows you to debug your code regardless of whether your effects run on the main application thread or on some other thread.
