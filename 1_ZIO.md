@@ -115,7 +115,7 @@ def main(args: Array[String]): Unit = {
     val runtime = Runtime.default
     implicit val trace: Trace = Trace.empty
     val meaningOfLife = ZIO.succeed(42)
-    Unsafe.unsafe { implicit u =>
+    Unsafe.unsafeCompat { implicit u =>
         val mol = runtime.unsafe.run(meaningOfLife)
         println(mol)
     }
@@ -123,3 +123,13 @@ def main(args: Array[String]): Unit = {
 ```
 - Runtime involves the thread pool and the mechanism by which ZIOs can be evaluated.
 - Trace allows you to debug your code regardless of whether your effects run on the main application thread or on some other thread.
+
+## Running ZIO Application in ZIO way ##
+```
+object Program extends ZIOAppDefault {
+    override def run = zioa.debug
+}
+```
+- ZIOAppDefault provides runtime, trace etc.
+- There is also a `ZIOApp` trait that allows us to implement the runtime in manual way.
+- `debug` method prints out the value of evaluated ZIO.
