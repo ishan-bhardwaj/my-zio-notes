@@ -189,3 +189,63 @@ val anAttempt_v2: ZIO[Any, Throwable, Int] = eitherZIO.absolve
 // Option -> ZIO
 val anOption: ZIO[Any, Option[Nothing], Int] = ZIO.fromOption(Some(42))
 ```
+
+## Errors vs Defects ##
+- Errors - failures that are present in the ZIO type signature ("checked" errors)
+- Defects - failures that are unrecoverable, unforeseen and not present in the ZIO type signature. Eg - `ZIO.succeed(1 / 0)`
+- `ZIO[R, E, A]` can finish with `Exit[E, A]` which consists of -
+    - `Success[A]` containing a value
+    - `Cause[E]` which can be either of the following -
+        - `Fail[E]` containing the error
+        - `Die(t: Throwable)` an unforeseen `Throwable` <- these are the defects
+- Exposing the cause -
+```
+val failedInt: ZIO[Any, String, Int] = ZIO.fail("I failed!")
+val failureCauseExposed: ZIO[Any, Cause[String], Int] = failedInt.sandbox
+val failureCauseHidden: ZIO[Any, String, Int] = failureCauseExposed.unsandbox
+
+// fold/foldZIO with cause
+val foldedWithCause = failedInt.foldCause(
+    cause => s"this failed with ${cause.defects}", 
+    value => s"this succeeded with $value"
+)
+```
+
+### Good Practise ###
+- At a lower level, your "errors" should be treated.
+- At a higher level, you should hide "errors" and assume they are unrecoverable.
+
+### Turning an error into defect (i.e. unrecoverable) ###
+- `orDie` method swallows the error channel and converts it into Nothing i.e. all the errors become defects.
+```
+def callHTTPEndpoint(url: String): ZIO[Any, IOException, String] =
+    ZIO.fail(new IOException("No internet"))
+
+val endpointCallWithDefects: ZIO[Any, Nothing, String] = 
+    callHTTPEndpoint("google.com").orDie
+```
+
+- Refining the error channel - narrowing the error channel and consider the remaning errors as defects
+```
+def callHTTPEndpointWideError(url: String): ZIO[Any, Exception, String] =
+    ZIO.fail(new IOException("No internet"))
+
+def callHTTPEndpoint_v2(url: String): ZIO[Any, IOException, String] =
+    callHTTPEndpointWideError(url).refineOrDie[IOException] {
+        case e: IOException => e
+        case _: NoRouteToHostException => new IOException("no route to host to $url")
+    }
+```
+
+- Unrefining the error channel - surface out the exception in the error channel
+```
+val endpointCallWithError = endpointCallWithDefects.unrefine {
+    case e => e.getMessage
+}
+```
+
+- If value channel is an `Option`, we can move the `None` case to the error channel -
+```
+val zioa: ZIO[Any, String, Option[Int]] = ???
+val ziob: ZIO[Any, Option[String], Int] = zioa.some
+```
